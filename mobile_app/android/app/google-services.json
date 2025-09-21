@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "474818731458",
-    "project_id": "test-102ff",
-    "storage_bucket": "test-102ff.appspot.com"
+    "project_number": "181023926162",
+    "project_id": "mobile-app-3ac38",
+    "storage_bucket": "mobile-app-3ac38.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:474818731458:android:62fc081676b6f5d9de4a5b",
+        "mobilesdk_app_id": "1:181023926162:android:14cf2186d128ea6313034b",
         "android_client_info": {
           "package_name": "com.example.mobile_app"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyCqjERKFwT8c-FINtCO1wBuQsJ66Wdgt5g"
+          "current_key": "AIzaSyA0FyyiQjmtD0USkXQRrIP9L8DsswkGCXw"
         }
       ],
       "services": {

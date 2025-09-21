@@ -24,21 +24,25 @@ import 'package:path_provider/path_provider.dart';
 import 'groups.dart';
 import 'journal.dart';
 
-List<String> collegeList = [];
+List<String> locationList = [];
 String dropdownValue = '';
-//trying to fetch all the colleges names first and store in an array
-Future<List<String>> fetchCollegeList() async {
+
+// fetch all locations (Lehigh buildings) from Firestore
+Future<List<String>> fetchLocationList() async {
   FirebaseFirestore firestore = FirebaseFirestore.instance;
   QuerySnapshot querySnapshot = await firestore.collection('locations').get();
 
   for (var doc in querySnapshot.docs) {
-    String college = doc['college'];
-    if (!collegeList.contains(college)) {
-      collegeList.add(college);
+    String name = doc['name']; // ✅ use "name" field instead of "college"
+    if (!locationList.contains(name)) {
+      locationList.add(name);
     }
   }
-  dropdownValue = collegeList.first;
-  return collegeList;
+
+  if (locationList.isNotEmpty) {
+    dropdownValue = locationList.first;
+  }
+  return locationList;
 }
 
 class Home extends StatelessWidget {
@@ -88,9 +92,9 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() {
     super.initState();
-    fetchCollegeList().then((college) {
+    fetchLocationList().then((college) {
       setState(() {
-        collegeList = college;
+        locationList = college;
       });
     });
   }
@@ -119,36 +123,28 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
-  Future<List<Object?>> getComments(locValue) async {
-    CollectionReference collectionRef = FirebaseFirestore.instance
-        .collection('comments')
-        .doc(locValue)
-        .collection("comments");
+Future<List<Map>> getComments(String locValue) async {
+  CollectionReference collectionRef = FirebaseFirestore.instance
+      .collection('comments')
+      .doc(locValue)
+      .collection("comments");
 
-    QuerySnapshot querySnapshot = await collectionRef.get();
+  QuerySnapshot querySnapshot = await collectionRef.get();
 
-    DateTime now = DateTime.now();
-    final allData = querySnapshot.docs
-        .map((doc) {
-          var data = doc.data();
-          if (data != null) {
-            // Explicitly cast data to Map<String, dynamic>
-            Map<String, dynamic> dataMap = data as Map<String, dynamic>;
-            DateTime? visibleTime =
-                (dataMap['visibleTime'] as Timestamp?)?.toDate();
-            if (visibleTime != null && now.isAfter(visibleTime)) {
-              if (dataMap['feel'] == 'g') {
-                return dataMap;
-              }
-            }
-          }
-          return null;
-        })
-        .where((data) => data != null)
-        .toList();
+  DateTime now = DateTime.now();
 
-    return allData;
-  }
+  // Return only comments that should be visible
+  final allData = querySnapshot.docs.map((doc) {
+    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    DateTime? visibleTime = (data['visibleTime'] as Timestamp?)?.toDate();
+    if (visibleTime != null && now.isAfter(visibleTime)) {
+      return data;
+    }
+    return {};
+  }).where((data) => data.isNotEmpty).toList();
+
+  return allData;
+}
 
   bool _isNSFW = false;
 
@@ -426,47 +422,78 @@ class _MyHomePageState extends State<MyHomePage> {
         ElevatedButton(
           style:
               ElevatedButton.styleFrom(backgroundColor: Colors.indigo.shade300),
-          onPressed: () {
+          onPressed: () async {
             final filter = ProfanityFilter();
-            // implement - Check for profanity - 
-            //returns a msg "Please refrain from using profanity"(if profanity is present)
-            // hint: use hasProfanity() plugin, then change true to profanity check
-            // your codes begin here
-            if (true){
-  
-            // end
-            //SUICIDAL MESSAGES FILTER HERE
-            }
-            else {
-              // add code to set feelValue to g b n, 'Positive'='g', 'Negative'='b', 'Neutral'='n'
-              if (selectedTone != null) {
-                String feelValue;
-                // your codes begin here
+            
+            String commentText = cmntController.text.trim();
+
+    // ✅ Profanity check
+    if (filter.hasProfanity(commentText)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please refrain from using profanity")),
+      );
+      return; // stop here
+    }
+
+    // ✅ Suicidal/self-harm filter (basic keyword example, you can expand)
+    final suicideKeywords = ["suicide", "kill myself", "end my life", "self harm"];
+    bool containsSuicidal = suicideKeywords.any(
+      (word) => commentText.toLowerCase().contains(word),
+    );
+    if (containsSuicidal) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "If you are feeling suicidal, please reach out for help immediately.",
+          ),
+        ),
+      );
+      return; // stop here
+    }
+
+    // ✅ Proceed if tone is selected
+    if (selectedTone != null) {
+      String feelValue;
+      if (selectedTone == "Positive") {
+        feelValue = "g";
+      } else if (selectedTone == "Negative") {
+        feelValue = "b";
+      } else {
+        feelValue = "n";
+      }
+
+      // Generate random delay
+     DateTime postTime = DateTime.now();
+    DateTime visibleTime = postTime; // no delay, visible immediately
 
 
-                // end
-                // Generating a random delay between 8 and 24 hours
-                int delayInHours = Random().nextInt(17) +
-                    8; // Generates a number between 0 and 16, then adds 8
-                DateTime postTime = DateTime.now();
-                DateTime visibleTime =
-                    postTime.add(Duration(hours: delayInHours));
-                // use FirebaseFirestore.instance to store the comment entry (data, user, feelvalue, posttime, visibletime)
-                // your codes begin here
+      // ✅ Save to Firestore under comments/{locValue}/comments/
+await FirebaseFirestore.instance
+    .collection("comments")
+    .doc(locValue)
+    .collection("comments")
+    .add({
+  "data": commentText,
+  "user": FirebaseAuth.instance.currentUser?.uid ?? "anonymous",
+  "feel": feelValue,  // ✅ fixed: now matches getComments()
+  "postTime": postTime,
+  "visibleTime": visibleTime,
+});
 
+      setState(() {
+        selectedTone = null;
+        cmntController.clear();
+      });
 
-                // end
-                setState(() {
-                  selectedTone = null;
-                  cmntController.clear();
-                });
-                Navigator.of(context).pop();
-              } else {
-                // Handle case when no tone is selected (Maybe show a snackbar or alert)
-              }
-            }
-          },
-          child: const Text('Add Entry'),
+      Navigator.of(context).pop();
+    } else {
+      // Handle case when no tone is selected
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please select a tone before posting")),
+      );
+    }
+  },
+   child: const Text('Add Entry'),
         ),
         ElevatedButton(
           onPressed: () {
@@ -566,27 +593,26 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
-  void _addCollegeMarkers(String collegeName) async {
-    FirebaseFirestore.instance
-        .collection("locations")
-        .where("college", isEqualTo: collegeName)
-        .get()
-        .then((querySnapshot) {
-      for (var doc in querySnapshot.docs) {
-        var data = doc.data() as Map<String, dynamic>;
-        var location = data['location'] as List<dynamic>;
-        var name = data['name'] as String;
+void _addCollegeMarkers(String collegeName) async {
+  FirebaseFirestore.instance
+      .collection("locations")
+      .where("name", isEqualTo: collegeName) // ✅ match by "name"
+      .get()
+      .then((querySnapshot) {
+    for (var doc in querySnapshot.docs) {
+      var data = doc.data() as Map<String, dynamic>;
+      var locArray = data['location'] as List<dynamic>;
+      var name = data['name'] as String;
 
-        //adds location for each "name" aka "building"
-        double lat = location[0];
-        double lng = location[1];
+      double lat = locArray[0];
+      double lng = locArray[1];
 
-        _add(lat, lng, name, false, -1);
-      }
-    }).catchError((error) {
-      print("Error getting documents: $error");
-    });
-  }
+      _add(lat, lng, name, false, -1); // keep your original marker adding logic
+    }
+  }).catchError((error) {
+    print("Error getting documents: $error");
+  });
+}
 
   void _onMapCreated(GoogleMapController controller) {
     mapController = controller;
@@ -769,7 +795,7 @@ class _MyHomePageState extends State<MyHomePage> {
                         ),
                         DropdownButton(
                           value: dropdownValue,
-                          items: collegeList
+                          items: locationList
                               .map<DropdownMenuItem<String>>((String value) {
                             return DropdownMenuItem<String>(
                               value: value,
